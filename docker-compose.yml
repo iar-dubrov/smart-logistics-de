@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: sl_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-deals_bigdata}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      N_PRICES: ${N_PRICES:-300000}
+    ports:
+      # только localhost: база с тестовым паролем не должна торчать в сеть
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Инициализация источника: schema + детерминированный генератор
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql:/sql:ro
+      - ./docker/init-source.sh:/docker-entrypoint-initdb.d/02_init_source.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-deals_bigdata}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  etl:
+    build:
+      context: .
+      dockerfile: docker/etl.Dockerfile
+    container_name: sl_etl
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_HOST: postgres
+    volumes:
+      - ./sql:/app/sql:ro
+      - ./etl:/app/etl:ro
+      - ./ml:/app/ml:ro
+    # Полный прогон: миграции -> ETL -> витрины -> ML train + batch scoring
+    command: ["python", "-m", "etl.main", "--with-ml"]
+
+volumes:
+  pgdata:
