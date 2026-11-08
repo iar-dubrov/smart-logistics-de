@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Зависимости ставим из локальных wheel (docker/wheels/), чтобы не качать ~300 МБ
+# Зависимости ставим из локальных wheel (docker/wheels/)
 # с PyPI при каждой сборке. Если каталог пуст — pip возьмёт пакеты из PyPI.
 COPY docker/wheels/ /tmp/wheels/
 COPY requirements.txt .
